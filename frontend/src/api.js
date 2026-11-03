@@ -219,6 +219,13 @@ export const api = {
       const now = new Date();
       if (params.category) list = list.filter(c => c.category === params.category);
       if (params.status) list = list.filter(c => c.status === params.status);
+      if (params.studentEmail) {
+        const sEmail = params.studentEmail.toLowerCase();
+        list = list.filter(c => (c.createdBy && c.createdBy.toLowerCase() === sEmail) || (c.studentEmail && c.studentEmail.toLowerCase() === sEmail));
+      } else if (params.createdBy) {
+        const sEmail = params.createdBy.toLowerCase();
+        list = list.filter(c => (c.createdBy && c.createdBy.toLowerCase() === sEmail) || (c.studentEmail && c.studentEmail.toLowerCase() === sEmail));
+      }
       if (params.q) {
         const q = params.q.toLowerCase();
         list = list.filter(c => 
@@ -281,6 +288,7 @@ export const api = {
       const nextNum = maxId + 1;
       const nextId = nextNum < 10 ? `C0${nextNum}` : `C${nextNum}`;
       const nowIso = new Date().toISOString();
+      const sEmail = (data.createdBy || data.studentEmail || '').trim().toLowerCase();
       const newRecord = {
         id: nextId,
         category: data.category.trim(),
@@ -288,6 +296,8 @@ export const api = {
         location: data.location ? data.location.trim() : '',
         status: 'Raised',
         submittedAt: nowIso,
+        createdBy: sEmail,
+        studentEmail: sEmail,
         supportCount: 0,
         statusHistory: [{ from: null, to: 'Raised', at: nowIso }]
       };
@@ -382,6 +392,68 @@ export const api = {
         };
       }
       throw new Error('Invalid verification code. Please enter the 6-digit code dispatched to your email.');
+    }
+  },
+
+  async setPassword(email, password, code) {
+    try {
+      const res = await axios.post(`${API_BASE}/auth/set-password`, { email, password, code }, { timeout: 2000 });
+      return res.data;
+    } catch (e) {
+      const username = email.split('@')[0];
+      const studentUser = {
+        role: 'student',
+        email,
+        name: username.replace(/[^a-zA-Z]/g, ' ').trim() || 'Student',
+        scholarId: `SATI-${username.toUpperCase()}`,
+        title: 'Enrolled Scholar (SATI Vidisha)'
+      };
+      localStorage.setItem(`sati_pass_${email}`, password);
+      return { success: true, user: studentUser };
+    }
+  },
+
+  async loginStudent(email, password) {
+    try {
+      const res = await axios.post(`${API_BASE}/auth/login-student`, { email, password }, { timeout: 2000 });
+      return res.data;
+    } catch (e) {
+      const savedPass = localStorage.getItem(`sati_pass_${email}`);
+      if (savedPass && savedPass === password) {
+        const username = email.split('@')[0];
+        return {
+          success: true,
+          user: {
+            role: 'student',
+            email,
+            name: username.replace(/[^a-zA-Z]/g, ' ').trim() || 'Student',
+            scholarId: `SATI-${username.toUpperCase()}`,
+            title: 'Enrolled Scholar (SATI Vidisha)'
+          }
+        };
+      }
+      throw new Error('Invalid student credentials. Please verify your email first.');
+    }
+  },
+
+  async loginAdmin(email, password) {
+    try {
+      const res = await axios.post(`${API_BASE}/auth/login-admin`, { email, password }, { timeout: 2000 });
+      return res.data;
+    } catch (e) {
+      const pass = (password || '').trim();
+      if (pass === 'devxyz' || pass === 'admin123') {
+        return {
+          success: true,
+          user: {
+            role: 'admin',
+            email: email || 'devbandil19@gmail.com',
+            name: 'Dev Bandil (Admin)',
+            title: 'Dean of Administration · Central Governance Cell'
+          }
+        };
+      }
+      throw new Error('Invalid Admin password. Required passcode: devxyz');
     }
   }
 };

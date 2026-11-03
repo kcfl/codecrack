@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 
 function Sidebar() {
   const location = useLocation();
-  const { isAdmin, setQrModalOpen, setAuthModalOpen } = useAuth();
+  const { isAdmin, setQrModalOpen } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -20,36 +20,45 @@ function Sidebar() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const menuItems = [
+  // Admin menu items: Notice NO "Raise Complaint" option per user specification!
+  const adminMenuItems = [
     {
       path: '/',
       label: 'Dashboard',
       icon: '📊',
-      adminOnly: true,
-      badge: 'Admin'
+      badge: 'Cockpit'
     },
     {
       path: '/complaints',
       label: 'Complaints Queue',
       icon: '📋',
-      adminOnly: true,
-      badge: 'Admin'
-    },
-    {
-      path: '/raise',
-      label: 'Raise Complaint',
-      icon: '📝',
-      adminOnly: false,
-      badge: 'Intake'
+      badge: 'Active'
     },
     {
       path: '/tools',
       label: 'System Tools',
       icon: '⚙️',
-      adminOnly: true,
       badge: 'E5/E6'
     }
   ];
+
+  // Student menu items: Student can ONLY see "Raise Complaint" and "My Grievances"
+  const studentMenuItems = [
+    {
+      path: '/student',
+      label: 'Raise Complaint',
+      icon: '📝',
+      badge: 'Intake'
+    },
+    {
+      path: '/student/status',
+      label: 'My Complaint Progress',
+      icon: '⏱️',
+      badge: 'Live SLA'
+    }
+  ];
+
+  const activeMenuItems = isAdmin ? adminMenuItems : studentMenuItems;
 
   return (
     <>
@@ -70,29 +79,21 @@ function Sidebar() {
 
       <aside className={`gov-sidebar ${mobileOpen ? 'open' : ''}`}>
         <div className="sidebar-section-title">
-          <span>NAVIGATION WORKFLOWS</span>
+          <span>{isAdmin ? 'ADMINISTRATIVE WORKFLOWS' : 'STUDENT INTAKE WORKFLOWS'}</span>
         </div>
 
         <nav className="gov-nav-list">
-          {menuItems.map((item) => {
+          {activeMenuItems.map((item) => {
             const isActive = location.pathname === item.path;
-            const isLocked = item.adminOnly && !isAdmin;
 
             return (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`gov-nav-link ${isActive ? 'active' : ''} ${isLocked ? 'locked-link' : ''}`}
-                onClick={(e) => {
-                  if (isLocked) {
-                    e.preventDefault();
-                    setAuthModalOpen(true);
-                  }
-                }}
+                className={`gov-nav-link ${isActive ? 'active' : ''}`}
               >
                 <span className="nav-icon">{item.icon}</span>
                 <span className="nav-label">{item.label}</span>
-                {isLocked && <span className="nav-lock-badge">🔒</span>}
               </Link>
             );
           })}
@@ -104,13 +105,13 @@ function Sidebar() {
             <span>📲 Campus Dispatch</span>
           </div>
           <p className="sidebar-qr-desc">
-            Display official QR Code for hostel & lab notice boards.
+            Official QR Code for hostel gates, labs &amp; router spots.
           </p>
           <button
             className="sidebar-qr-btn"
             onClick={() => setQrModalOpen(true)}
           >
-            Open Intake QR
+            Open Student QR
           </button>
         </div>
 

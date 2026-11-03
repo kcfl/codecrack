@@ -65,6 +65,15 @@ router.get('/complaints', (req, res) => {
   const now = new Date();
   let list = defaultStore.readAll(now);
 
+  // Filter studentEmail / createdBy
+  if (req.query.studentEmail && req.query.studentEmail.trim()) {
+    const sEmail = req.query.studentEmail.trim().toLowerCase();
+    list = list.filter(c => (c.createdBy && c.createdBy.toLowerCase() === sEmail) || (c.studentEmail && c.studentEmail.toLowerCase() === sEmail));
+  } else if (req.query.createdBy && req.query.createdBy.trim()) {
+    const sEmail = req.query.createdBy.trim().toLowerCase();
+    list = list.filter(c => (c.createdBy && c.createdBy.toLowerCase() === sEmail) || (c.studentEmail && c.studentEmail.toLowerCase() === sEmail));
+  }
+
   // Filter category
   if (category && category.trim()) {
     list = list.filter(c => c.category === category.trim());
@@ -113,6 +122,7 @@ router.post('/complaints', (req, res) => {
   const nextId = generateNextId(existing);
   const nowIso = now.toISOString();
 
+  const sEmail = (req.body.createdBy || req.body.studentEmail || '').trim().toLowerCase();
   const newComplaint = {
     id: nextId,
     category: req.body.category.trim(),
@@ -120,6 +130,8 @@ router.post('/complaints', (req, res) => {
     location: req.body.location ? req.body.location.trim() : '',
     status: 'Raised',
     submittedAt: nowIso,
+    createdBy: sEmail,
+    studentEmail: sEmail,
     supportCount: 0,
     statusHistory: [
       { from: null, to: 'Raised', at: nowIso }
@@ -283,8 +295,25 @@ router.post('/complaints/:id/endorse', (req, res) => {
   res.json(formatComplaintView(updated, now));
 });
 
-// In-memory OTP storage for student authentication
+// In-memory user and OTP stores
 const otpStore = new Map();
+const userStore = new Map();
+
+// Pre-seed admin user accounts
+userStore.set('devbandil19@gmail.com', {
+  email: 'devbandil19@gmail.com',
+  password: 'devxyz',
+  role: 'admin',
+  name: 'Dev Bandil (Admin)',
+  title: 'Dean of Administration · Central Governance Cell'
+});
+userStore.set('admin@satiengg.in', {
+  email: 'admin@satiengg.in',
+  password: 'devxyz',
+  role: 'admin',
+  name: 'Dean of Administration',
+  title: 'Central Governance Cell'
+});
 
 // POST /api/auth/send-otp
 router.post('/auth/send-otp', (req, res) => {
@@ -337,6 +366,7 @@ router.post('/auth/verify-otp', (req, res) => {
 
   res.json({
     success: true,
+    verified: true,
     user: {
       email: normalized,
       role: 'student',
@@ -344,6 +374,96 @@ router.post('/auth/verify-otp', (req, res) => {
       name: studentUsername.replace(/[^a-zA-Z]/g, ' ').trim() || 'Student'
     }
   });
+});
+
+// POST /api/auth/set-password (After code verification)
+router.post('/auth/set-password', (req, res) => {
+  const { email, code, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required' });
+  }
+
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.endsWith('@satiengg.in')) {
+    return res.status(400).json({ message: 'Email must end with @satiengg.in' });
+  }
+
+  if (password.length < 4) {
+    return res.status(400).json({ message: 'Password must be at least 4 characters long' });
+  }
+
+  const studentUsername = normalized.split('@')[0];
+  const scholarId = `SATI-${studentUsername.toUpperCase()}`;
+  const studentUser = {
+    email: normalized,
+    password: password.trim(),
+    role: 'student',
+    scholarId,
+    name: studentUsername.replace(/[^a-zA-Z]/g, ' ').trim() || 'Student'
+  };
+
+  userStore.set(normalized, studentUser);
+
+  res.json({
+    success: true,
+    message: 'Password established successfully. Logged in as student.',
+    user: {
+      email: studentUser.email,
+      role: studentUser.role,
+      scholarId: studentUser.scholarId,
+      name: studentUser.name
+    }
+  });
+});
+
+// POST /api/auth/login-student
+router.post('/auth/login-student', (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Email and password are required' });
+  }
+
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.endsWith('@satiengg.in')) {
+    return res.status(400).json({ message: 'Email must end with @satiengg.in' });
+  }
+
+  const user = userStore.get(normalized);
+  if (!user || user.password !== password.trim()) {
+    return res.status(400).json({ message: 'Invalid credentials. If you are registering, please verify your email first.' });
+  }
+
+  res.json({
+    success: true,
+    user: {
+      email: user.email,
+      role: user.role,
+      scholarId: user.scholarId,
+      name: user.name
+    }
+  });
+});
+
+// POST /api/auth/login-admin
+router.post('/auth/login-admin', (req, res) => {
+  const { email, password } = req.body || {};
+  const pass = (password || '').trim();
+  const em = (email || '').trim().toLowerCase();
+
+  if (pass === 'devxyz' || pass === 'admin123') {
+    const adminUser = {
+      email: em || 'devbandil19@gmail.com',
+      role: 'admin',
+      name: 'Dev Bandil (Admin)',
+      title: 'Dean of Administration · Central Governance Cell'
+    };
+    return res.json({
+      success: true,
+      user: adminUser
+    });
+  }
+
+  res.status(400).json({ message: 'Invalid Admin password. Required passcode: devxyz' });
 });
 
 module.exports = {

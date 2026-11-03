@@ -141,3 +141,4 @@ function QRModal() {
 }
 
 export default QRModal;
+

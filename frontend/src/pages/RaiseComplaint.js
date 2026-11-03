@@ -105,10 +105,13 @@ function RaiseComplaint() {
 
     try {
       setSubmitting(true);
+      const studentEmail = user?.email || 'scholar@satiengg.in';
       const created = await api.createComplaint({
         category,
         description: description.trim(),
-        location: location.trim()
+        location: location.trim(),
+        createdBy: studentEmail,
+        studentEmail: studentEmail
       });
       setSuccessComplaint(created);
       setDuplicateMatch(null);
@@ -188,12 +191,22 @@ function RaiseComplaint() {
               </p>
             </div>
           </div>
-          <button
-            className="gov-primary-btn"
-            onClick={() => navigate('/complaints')}
-          >
-            View in Registry ➔
-          </button>
+          <div className="success-action-btns">
+            <button
+              className="gov-primary-btn"
+              onClick={() => navigate('/student/status')}
+            >
+              ⏱️ Track My Complaint Progress ➔
+            </button>
+            {user?.role === 'admin' && (
+              <button
+                className="gov-secondary-btn"
+                onClick={() => navigate('/complaints')}
+              >
+                View in Admin Registry
+              </button>
+            )}
+          </div>
         </div>
       )}
 
