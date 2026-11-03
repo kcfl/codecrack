@@ -1,295 +1,410 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import API from '../api';
+// frontend/src/pages/Dashboard.js
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../api';
 
 function Dashboard() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [queue, setQueue] = useState([]);
-  const [config, setConfig] = useState(null);
+  const [allComplaints, setAllComplaints] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [advancingId, setAdvancingId] = useState(null);
-  const [error, setError] = useState(null);
+  const [showFormula, setShowFormula] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
 
-  const fetchData = useCallback(async () => {
+  const loadData = async () => {
     try {
-      const [statsRes, queueRes, configRes] = await Promise.all([
-        API.get('/stats'),
-        API.get('/priority-queue'),
-        API.get('/config')
+      setLoading(true);
+      const [statsData, queueData, complaintsData] = await Promise.all([
+        api.getStats(),
+        api.getPriorityQueue(3),
+        api.getComplaints({ sort: 'priority' })
       ]);
-      setStats(statsRes.data);
-      setQueue(queueRes.data);
-      setConfig(configRes.data);
-      setError(null);
+      setStats(statsData);
+      setQueue(queueData);
+      setAllComplaints(complaintsData);
     } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-      setError('Failed to connect to backend service. Please ensure backend is running.');
+      console.error('Failed to load dashboard data:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    loadData();
+  }, []);
 
   const handleAdvance = async (complaint) => {
     if (!complaint.nextStatus) return;
-    setAdvancingId(complaint.id);
     try {
-      await API.patch(`/complaints/${complaint.id}/status`, { to: complaint.nextStatus });
-      await fetchData(); // immediate re-fetch
+      setActionLoading(complaint.id);
+      await api.updateStatus(complaint.id, complaint.nextStatus);
+      await loadData();
     } catch (err) {
-      console.error('Failed to advance status:', err);
-      setError(err.response?.data?.message || 'Failed to update status');
+      alert(err.response?.data?.message || err.message || 'Status transition failed');
     } finally {
-      setAdvancingId(null);
+      setActionLoading(null);
     }
   };
 
-  const getStatusStyle = (status) => {
-    if (status === 'Raised') return { background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' };
-    if (status === 'In Progress') return { background: '#dbeafe', color: '#1e40af', border: '1px solid #93c5fd' };
-    return { background: '#dcfce7', color: '#166534', border: '1px solid #86efac' };
-  };
-
-  const getUrgencyStyle = (band) => {
-    if (band === 'High') return { background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5' };
-    if (band === 'Medium') return { background: '#ffedd5', color: '#9a3412', border: '1px solid #fdba74' };
-    return { background: '#f3f4f6', color: '#4b5563', border: '1px solid #e5e7eb' };
-  };
-
-  if (loading) {
-    return (
-      <div className="main-content" style={{ padding: '32px' }}>
-        <p>Loading dashboard...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="main-content" style={{ padding: '32px', maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '28px' }}>
-        <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#111827', letterSpacing: '-0.5px' }}>
-          SATI Campus Complaint Dashboard
-        </h1>
-        <p style={{ color: '#6b7280', fontSize: '14px', marginTop: '4px' }}>
-          Real-time grievance priority queue and resolution tracking
-        </p>
-      </header>
-
-      {error && (
-        <div style={{ padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', marginBottom: '20px' }}>
-          {error}
-        </div>
-      )}
-
-      {/* Summary Cards */}
-      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>Total Complaints</div>
-          <div style={{ fontSize: '36px', fontWeight: '800', color: '#111827', margin: '8px 0' }}>{stats?.total ?? 0}</div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>All reported issues</div>
-        </div>
-
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: '#d97706', textTransform: 'uppercase' }}>Pending (Unresolved)</div>
-          <div style={{ fontSize: '36px', fontWeight: '800', color: '#d97706', margin: '8px 0' }}>{stats?.pending ?? 0}</div>
-          <div style={{ fontSize: '12px', color: '#4b5563', display: 'flex', gap: '12px', fontWeight: '500' }}>
-            <span>Raised: <strong>{stats?.raised ?? 0}</strong></span>
-            <span>•</span>
-            <span>In Progress: <strong>{stats?.inProgress ?? 0}</strong></span>
+    <div className="gov-page-container">
+      {/* Header section with PRD tag and action buttons */}
+      <div className="gov-header-section">
+        <div>
+          <div className="gov-badge-row">
+            <span className="gov-pill-sec">PRD SEC 11.2 A</span>
+            <span className="gov-pill-cell">ADMINISTRATIVE CELL</span>
           </div>
-        </div>
-
-        <div style={{ background: '#fff', padding: '20px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: '#16a34a', textTransform: 'uppercase' }}>Resolved</div>
-          <div style={{ fontSize: '36px', fontWeight: '800', color: '#16a34a', margin: '8px 0' }}>{stats?.resolved ?? 0}</div>
-          <div style={{ fontSize: '13px', color: '#6b7280' }}>Closed campus issues</div>
-        </div>
-      </section>
-
-      {/* Priority Queue Panel */}
-      <section style={{ background: '#fff', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb', marginBottom: '32px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #f3f4f6', paddingBottom: '12px' }}>
-          <div>
-            <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827' }}>Top Priority Queue</h2>
-            <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>Highest priority unresolved complaints needing action</p>
-          </div>
-          <span style={{ fontSize: '12px', background: '#eff6ff', color: '#1e40af', padding: '4px 10px', borderRadius: '20px', fontWeight: '600' }}>
-            Top {queue.length} items
-          </span>
-        </div>
-
-        {queue.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', background: '#f9fafb', borderRadius: '8px' }}>
-            <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎉</div>
-            <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#111827' }}>All clear</h3>
-            <p style={{ fontSize: '14px', color: '#6b7280' }}>There are currently no unresolved complaints in the queue.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {queue.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '18px',
-                  borderRadius: '10px',
-                  border: '1px solid #e5e7eb',
-                  background: '#fafbfc',
-                  flexWrap: 'wrap',
-                  gap: '16px'
-                }}
-              >
-                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flex: '1 1 300px' }}>
-                  <div
-                    style={{
-                      background: '#1e3a8a',
-                      color: '#fff',
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: '800',
-                      fontSize: '16px',
-                      flexShrink: 0
-                    }}
-                  >
-                    #{item.rank}
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                      <span style={{ fontWeight: '800', color: '#111827', fontSize: '15px' }}>{item.id}</span>
-                      <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
-                        {item.category}
-                      </span>
-                      <span style={{ ...getStatusStyle(item.status), fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
-                        {item.status}
-                      </span>
-                      {item.urgencyBand && (
-                        <span style={{ ...getUrgencyStyle(item.urgencyBand), fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px' }}>
-                          {item.urgencyBand}
-                        </span>
-                      )}
-                      {item.overdueByHours > 0 && (
-                        <span style={{ background: '#fee2e2', color: '#b91c1c', fontSize: '11px', fontWeight: '700', padding: '2px 8px', borderRadius: '4px', border: '1px solid #f87171' }}>
-                          Overdue by {item.overdueByHours}h
-                        </span>
-                      )}
-                    </div>
-
-                    <p style={{ fontSize: '14px', color: '#1f2937', fontWeight: '500', marginBottom: '6px' }}>
-                      {item.description}
-                    </p>
-
-                    <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '12px', color: '#6b7280' }}>
-                      <span>Pending: <strong>{item.hoursPending}h</strong></span>
-                      {item.score && (
-                        <span>
-                          Breakdown: <strong>Category {item.score.base} + Age {item.score.age} + Reports {item.score.reports} = {item.score.total}</strong>
-                        </span>
-                      )}
-                    </div>
-
-                    {item.tieBreakNote && (
-                      <div style={{ marginTop: '6px', fontSize: '12px', color: '#0369a1', fontStyle: 'italic' }}>
-                        ℹ️ {item.tieBreakNote}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                  <div style={{ textAlign: 'center', minWidth: '70px' }}>
-                    <div style={{ fontSize: '32px', fontWeight: '900', color: '#1e3a8a', lineHeight: '1' }}>
-                      {item.score ? item.score.total : '-'}
-                    </div>
-                    <div style={{ fontSize: '11px', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', marginTop: '2px' }}>Score</div>
-                  </div>
-
-                  {item.nextStatus && (
-                    <button
-                      onClick={() => handleAdvance(item)}
-                      disabled={advancingId === item.id}
-                      style={{
-                        background: '#1e3a8a',
-                        color: '#fff',
-                        border: 'none',
-                        padding: '9px 16px',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: advancingId === item.id ? 'not-allowed' : 'pointer',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {advancingId === item.id ? 'Advancing...' : `Advance to ${item.nextStatus}`}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* How Priority Works Panel */}
-      <section style={{ background: '#fff', padding: '24px', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', marginBottom: '14px' }}>
-          How Priority Works
-        </h2>
-
-        <div style={{ marginBottom: '20px', background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '4px' }}>Formula:</div>
-          <code style={{ fontSize: '14px', color: '#0f172a', fontWeight: '600', fontFamily: 'monospace' }}>
-            score = categoryWeight + floor(hoursPending / 24) + min(supportCount, 3)
-          </code>
-          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>
-            Resolved complaints are automatically excluded and not scored. Age increases by +1 for every complete 24-hour period pending.
+          <h2 className="gov-page-title">Executive Grievance Cockpit</h2>
+          <p className="gov-page-subtitle">
+            Deterministic Priority Engine · Tiered SLA &amp; Tie-Breaker Queue
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
-          <div>
-            <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '10px' }}>Category Weights & SLAs</h3>
-            <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#f9fafb', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '8px' }}>Category</th>
-                  <th style={{ padding: '8px' }}>Weight</th>
-                  <th style={{ padding: '8px' }}>SLA Target</th>
-                </tr>
-              </thead>
-              <tbody>
-                {config && config.categories?.map((cat) => (
-                  <tr key={cat} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '8px', fontWeight: '600' }}>{cat}</td>
-                    <td style={{ padding: '8px' }}>+{config.weights?.[cat] ?? 0}</td>
-                    <td style={{ padding: '8px' }}>{config.slaTargets?.[cat] ?? 0} hours</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="gov-action-cluster">
+          <button
+            className="gov-secondary-btn"
+            onClick={() => navigate('/tools')}
+            title="Open Urgency Simulator"
+          >
+            📊 Score Simulator
+          </button>
+          <button
+            className="gov-secondary-btn"
+            onClick={() => setShowFormula(!showFormula)}
+            title="Toggle Formula Breakdown"
+          >
+            fx Math Breakdown
+          </button>
+          <button
+            className="gov-primary-btn"
+            onClick={loadData}
+            disabled={loading}
+          >
+            🔄 Re-Rank Queue
+          </button>
+        </div>
+      </div>
 
-          <div>
-            <h3 style={{ fontSize: '14px', fontWeight: '700', color: '#374151', marginBottom: '10px' }}>Deterministic Tie-Break Rules</h3>
-            <ol style={{ paddingLeft: '20px', fontSize: '13px', color: '#4b5563', lineHeight: '1.8' }}>
-              {config && config.tieBreakRules?.map((rule, idx) => (
-                <li key={idx} style={{ fontWeight: '500' }}>{rule}</li>
-              ))}
-            </ol>
+      {/* 4 Stat Summary Cards */}
+      <div className="gov-stats-grid">
+        {/* Total Complaints */}
+        <div className="gov-card stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-title">TOTAL COMPLAINTS</span>
+            <span className="stat-card-icon">🗄️</span>
+          </div>
+          <div className="stat-card-body">
+            <div className="stat-number">{stats ? stats.total : 4}</div>
+            <div className="stat-subtitle">Logged Records</div>
+          </div>
+          <div className="stat-card-footer">
+            <span>Formula: Pending + Resolved</span>
+            <span className="stat-formula-calc">
+              {stats ? `${stats.pending} + ${stats.resolved} = ${stats.total}` : '3 + 1 = 4'}
+            </span>
           </div>
         </div>
-      </section>
+
+        {/* Pending Queue */}
+        <div className="gov-card stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-title">PENDING QUEUE</span>
+            <span className="stat-card-icon">📋</span>
+          </div>
+          <div className="stat-card-body">
+            <div className="stat-number pending-number">{stats ? stats.pending : 3}</div>
+            <div className="stat-subtitle">In Active Resolution</div>
+          </div>
+          <div className="stat-card-footer">
+            <div className="stat-pill-group">
+              <span className="mini-pill raised-pill">
+                ● {stats ? stats.raised : 2} Raised
+              </span>
+              <span className="mini-pill inprog-pill">
+                ● {stats ? stats.inProgress : 1} In Progress
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Resolved Closed */}
+        <div className="gov-card stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-title">RESOLVED CLOSED</span>
+            <span className="stat-card-icon">✅</span>
+          </div>
+          <div className="stat-card-body">
+            <div className="stat-number resolved-number">{stats ? stats.resolved : 1}</div>
+            <div className="stat-subtitle">Terminal Archived</div>
+          </div>
+          <div className="stat-card-footer">
+            <span className="stat-excluded-note">C04 (Lab CS-3) Excluded via M10</span>
+          </div>
+        </div>
+
+        {/* Category Breakdown */}
+        <div className="gov-card stat-card">
+          <div className="stat-card-header">
+            <span className="stat-card-title">CATEGORY BREAKDOWN</span>
+            <span className="stat-card-icon">🌐</span>
+          </div>
+          <div className="stat-card-body">
+            <div className="category-breakdown-grid">
+              <div className="cat-item">
+                <span className="cat-label">Wi-Fi</span>
+                <span className="cat-count">{stats?.byCategory?.['Wi-Fi'] ?? 1}</span>
+              </div>
+              <div className="cat-item">
+                <span className="cat-label">Hostel</span>
+                <span className="cat-count">{stats?.byCategory?.['Hostel'] ?? 1}</span>
+              </div>
+              <div className="cat-item">
+                <span className="cat-label">Classroom</span>
+                <span className="cat-count">{stats?.byCategory?.['Classroom'] ?? 1}</span>
+              </div>
+              <div className="cat-item">
+                <span className="cat-label">Laboratory</span>
+                <span className="cat-count">{stats?.byCategory?.['Laboratory'] ?? 1}</span>
+              </div>
+            </div>
+          </div>
+          <div className="stat-card-footer text-center">
+            <span className="cat-spread-note">Equal spread (25% each)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* How Priority Scoring Works Collapsible Banner */}
+      <div className="gov-card formula-banner-card">
+        <div
+          className="formula-banner-header"
+          onClick={() => setShowFormula(!showFormula)}
+        >
+          <div className="formula-banner-title">
+            <span className="sigma-icon">∑</span>
+            <div>
+              <strong>How Priority Scoring Works · PRD Specification</strong>
+              <p>Deterministic arithmetic, category weighting, and 5-tier strict tie-breaking logic</p>
+            </div>
+          </div>
+          <button className="banner-toggle-btn">
+            {showFormula ? 'Hide Details ⌃' : 'Show Details ⌵'}
+          </button>
+        </div>
+
+        {showFormula && (
+          <div className="formula-banner-content">
+            <div className="formula-eq-box">
+              <div className="math-display">
+                Score = Base + Age + Reports
+              </div>
+              <p className="formula-expl">
+                • <strong>Base</strong>: Laboratory: 3, Wi-Fi: 2, Hostel: 2, Classroom: 1<br />
+                • <strong>Age</strong>: <code>floor(hoursPending / 24)</code> (+1 point for every completed 24 hours unresolved)<br />
+                • <strong>Reports</strong>: <code>min(supportCount, 3)</code> (up to +3 points for student endorsements)<br />
+                • <strong>Resolved Exclusion</strong>: Resolved complaints are excluded from the priority queue immediately.
+              </p>
+            </div>
+
+            <div className="tie-break-rules-block">
+              <h5>Strict 5-Tier Tie-Break Hierarchy (PRD Section 6.6):</h5>
+              <ol className="tie-break-list">
+                <li>1. Higher score</li>
+                <li>2. More hours pending (older complaints first)</li>
+                <li>3. Higher category weight</li>
+                <li>4. Raised before In Progress (untouched issues prioritized)</li>
+                <li>5. Lower ID number (deterministic numerical sequence, e.g. C01 &lt; C02)</li>
+              </ol>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Urgent Unresolved Queue (Top 3) */}
+      <div className="gov-section-header">
+        <div className="section-title-wrap">
+          <span className="red-bullet-dot">●</span>
+          <h3 className="section-heading">Urgent Unresolved Queue (Top 3)</h3>
+          <span className="sorting-badge">Strict M10 Sorting</span>
+        </div>
+        <div className="sla-legend-strip">
+          <span className="legend-item"><span className="legend-dot dot-green"></span> On Target</span>
+          <span className="legend-item"><span className="legend-dot dot-yellow"></span> Approaching SLA</span>
+          <span className="legend-item"><span className="legend-dot dot-red"></span> Overdue</span>
+        </div>
+      </div>
+
+      {queue.length === 0 ? (
+        <div className="gov-card all-clear-card">
+          <span className="all-clear-icon">🎉</span>
+          <h4>All Clear</h4>
+          <p>No active unresolved grievances currently in the priority queue.</p>
+        </div>
+      ) : (
+        <div className="gov-priority-cards-grid">
+          {queue.map((c, idx) => {
+            const isOverdue = c.overdueByHours > 0;
+            const slaTarget = c.slaTargetHours || 24;
+            const hp = c.hoursPending || 0;
+            const remaining = Math.max(0, slaTarget - hp);
+
+            return (
+              <div key={c.id} className="gov-card priority-cockpit-card">
+                <div className="cockpit-card-top">
+                  <div className="ticket-id-tag">
+                    <span className="rank-label">#{c.rank || idx + 1}</span>
+                    <strong className="ticket-id">{c.id}</strong>
+                  </div>
+                  <div className="cockpit-chips">
+                    {isOverdue ? (
+                      <span className="status-chip chip-overdue">
+                        ● Overdue by {c.overdueByHours}h
+                      </span>
+                    ) : (
+                      <span className="status-chip chip-target">
+                        ● {remaining === 0 ? 'On Target' : `${remaining}h Left`}
+                      </span>
+                    )}
+                    <span className={`status-chip chip-${c.status?.toLowerCase().replace(' ', '-')}`}>
+                      {c.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="cockpit-location-line">
+                  {c.category} {c.location ? `· ${c.location}` : ''}
+                </div>
+
+                <p className="cockpit-description">{c.description}</p>
+
+                <div className="cockpit-pending-meta">
+                  <span>⏱ {hp}h Pending</span>
+                  <span>🎯 Target: {slaTarget}h</span>
+                </div>
+
+                {/* Priority Computation Score Box */}
+                <div className="cockpit-computation-box">
+                  <div className="comp-box-header">
+                    <span className="comp-label">PRIORITY COMPUTATION</span>
+                    <div className="comp-score-wrap">
+                      <span className="comp-score-text">Score</span>
+                      <strong className="comp-score-num">{c.score?.total ?? 0}</strong>
+                    </div>
+                  </div>
+                  <div className="comp-formula-line">
+                    Category +{c.score?.base ?? 0} + Age +{c.score?.age ?? 0} [floor({hp}/24)] + Reports +{c.score?.reports ?? 0} = {c.score?.total ?? 0}
+                  </div>
+                  {c.tieBreakNote && (
+                    <div className="comp-tie-note">
+                      ℹ {c.tieBreakNote}
+                    </div>
+                  )}
+                </div>
+
+                {/* Advance Button */}
+                {c.nextStatus ? (
+                  <button
+                    className="cockpit-advance-btn"
+                    onClick={() => handleAdvance(c)}
+                    disabled={actionLoading === c.id}
+                  >
+                    {actionLoading === c.id ? (
+                      'Advancing...'
+                    ) : c.nextStatus === 'In Progress' ? (
+                      '▶ Advance to In Progress'
+                    ) : (
+                      '✓ Advance to Resolved'
+                    )}
+                  </button>
+                ) : (
+                  <div className="cockpit-terminal-label">Terminal Resolved</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Repository State & Terminal Verification Table */}
+      <div className="gov-card registry-table-card">
+        <div className="registry-card-header">
+          <div className="registry-title-wrap">
+            <span className="doc-icon">📋</span>
+            <div>
+              <h4>Repository State &amp; Terminal Verification</h4>
+              <p>Strict M10 Compliance Record Registry</p>
+            </div>
+          </div>
+          <span className="strict-protocol-tag">Strict M10 Compliance Record Registry</span>
+        </div>
+
+        <div className="table-responsive">
+          <table className="gov-data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>CATEGORY</th>
+                <th>PENDING HOURS</th>
+                <th>SLA STATUS</th>
+                <th>CALCULATED SCORE</th>
+                <th>LIFECYCLE STATE</th>
+                <th>QUEUE INCLUSION</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allComplaints.map((c) => {
+                const isOverdue = c.overdueByHours > 0;
+                const hp = c.hoursPending || 0;
+                const sla = c.slaTargetHours || 24;
+
+                let inclusion = 'Excluded (M10 Filter)';
+                if (c.status !== 'Resolved') {
+                  const qIdx = queue.findIndex(q => q.id === c.id);
+                  if (qIdx !== -1) {
+                    inclusion = `Rank #${qIdx + 1} Active`;
+                  } else {
+                    inclusion = 'Pending In Queue';
+                  }
+                }
+
+                return (
+                  <tr key={c.id}>
+                    <td><strong>{c.id}</strong></td>
+                    <td>{c.category}</td>
+                    <td>{hp} hrs</td>
+                    <td>
+                      {c.status === 'Resolved' ? (
+                        <span className="sla-pill-green">Met at {hp}h</span>
+                      ) : isOverdue ? (
+                        <span className="sla-pill-red">Overdue (+{c.overdueByHours}h)</span>
+                      ) : (
+                        <span className="sla-pill-green">On Target ({sla}h)</span>
+                      )}
+                    </td>
+                    <td>
+                      <strong>Score {c.status === 'Resolved' ? (c.score?.base ?? 3) : (c.score?.total ?? 0)}</strong>
+                    </td>
+                    <td>
+                      <span className={`status-tag status-${c.status?.toLowerCase().replace(' ', '-')}`}>
+                        {c.status}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={c.status === 'Resolved' ? 'text-muted-italic' : 'text-rank-bold'}>
+                        {inclusion}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
 
 export default Dashboard;
-

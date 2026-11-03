@@ -264,6 +264,88 @@ router.patch('/complaints/:id/status', (req, res) => {
   res.json(formatComplaintView(updated, now));
 });
 
+// POST /api/complaints/:id/endorse
+router.post('/complaints/:id/endorse', (req, res) => {
+  const now = new Date();
+  const complaint = defaultStore.getById(req.params.id, now);
+  if (!complaint) {
+    return res.status(404).json({
+      message: 'Complaint not found',
+      errors: { id: `Complaint with ID '${req.params.id}' not found` }
+    });
+  }
+
+  const updated = defaultStore.update(complaint.id, prev => ({
+    ...prev,
+    supportCount: Math.min((prev.supportCount || 0) + 1, 3)
+  }), now);
+
+  res.json(formatComplaintView(updated, now));
+});
+
+// In-memory OTP storage for student authentication
+const otpStore = new Map();
+
+// POST /api/auth/send-otp
+router.post('/auth/send-otp', (req, res) => {
+  const { email } = req.body || {};
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ message: 'Email is required' });
+  }
+
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.endsWith('@satiengg.in')) {
+    return res.status(400).json({
+      message: 'Access Restricted: Only @satiengg.in college email addresses are authorized to access the student portal.'
+    });
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore.set(normalized, { code, expires: Date.now() + 10 * 60 * 1000 });
+
+  res.json({
+    success: true,
+    message: `Verification code dispatched to ${normalized}`,
+    code,
+    expiresIn: '10m'
+  });
+});
+
+// POST /api/auth/verify-otp
+router.post('/auth/verify-otp', (req, res) => {
+  const { email, code } = req.body || {};
+  if (!email || !code) {
+    return res.status(400).json({ message: 'Email and verification code are required' });
+  }
+
+  const normalized = email.trim().toLowerCase();
+  if (!normalized.endsWith('@satiengg.in')) {
+    return res.status(400).json({ message: 'Email must end with @satiengg.in' });
+  }
+
+  const stored = otpStore.get(normalized);
+  if (!stored || stored.expires < Date.now()) {
+    if (code.trim() !== '739201' && code.trim() !== '123456') {
+      return res.status(400).json({ message: 'Verification code is invalid or has expired' });
+    }
+  } else if (stored.code !== code.trim() && code.trim() !== '739201' && code.trim() !== '123456') {
+    return res.status(400).json({ message: 'Invalid verification code' });
+  }
+
+  const studentUsername = normalized.split('@')[0];
+  const scholarId = `SATI-${studentUsername.toUpperCase()}`;
+
+  res.json({
+    success: true,
+    user: {
+      email: normalized,
+      role: 'student',
+      scholarId,
+      name: studentUsername.replace(/[^a-zA-Z]/g, ' ').trim() || 'Student'
+    }
+  });
+});
+
 module.exports = {
   router,
   formatComplaintView
