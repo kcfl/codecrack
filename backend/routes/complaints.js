@@ -316,7 +316,7 @@ userStore.set('admin@satiengg.in', {
 });
 
 // POST /api/auth/send-otp
-router.post('/auth/send-otp', (req, res) => {
+router.post('/auth/send-otp', async (req, res) => {
   const { email } = req.body || {};
   if (!email || typeof email !== 'string') {
     return res.status(400).json({ message: 'Email is required' });
@@ -329,19 +329,52 @@ router.post('/auth/send-otp', (req, res) => {
     });
   }
 
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  let supabaseSent = false;
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const sbRes = await fetch(`${supabaseUrl}/auth/v1/otp`, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: normalized,
+          create_user: true
+        })
+      });
+
+      if (sbRes.ok) {
+        supabaseSent = true;
+      } else {
+        const errData = await sbRes.json().catch(() => ({}));
+        console.warn('Supabase OTP response:', errData);
+      }
+    } catch (e) {
+      console.error('Supabase OTP error:', e);
+    }
+  }
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore.set(normalized, { code, expires: Date.now() + 10 * 60 * 1000 });
+  otpStore.set(normalized, { code, expires: Date.now() + 10 * 60 * 1000, supabaseSent });
 
   res.json({
     success: true,
-    message: `Verification code dispatched to ${normalized}`,
-    code,
+    supabaseSent,
+    message: supabaseSent
+      ? `Verification code dispatched to ${normalized} via Supabase Mail. Please check your college inbox.`
+      : `Verification code dispatched to ${normalized}.`,
+    code: supabaseSent ? undefined : code,
     expiresIn: '10m'
   });
 });
 
 // POST /api/auth/verify-otp
-router.post('/auth/verify-otp', (req, res) => {
+router.post('/auth/verify-otp', async (req, res) => {
   const { email, code } = req.body || {};
   if (!email || !code) {
     return res.status(400).json({ message: 'Email and verification code are required' });
@@ -352,13 +385,48 @@ router.post('/auth/verify-otp', (req, res) => {
     return res.status(400).json({ message: 'Email must end with @satiengg.in' });
   }
 
-  const stored = otpStore.get(normalized);
-  if (!stored || stored.expires < Date.now()) {
-    if (code.trim() !== '739201' && code.trim() !== '123456') {
-      return res.status(400).json({ message: 'Verification code is invalid or has expired' });
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  let verified = false;
+
+  // 1. Try Supabase verification
+  if (supabaseUrl && supabaseKey) {
+    try {
+      const sbRes = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+        method: 'POST',
+        headers: {
+          apikey: supabaseKey,
+          Authorization: `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          type: 'email',
+          email: normalized,
+          token: code.trim()
+        })
+      });
+
+      if (sbRes.ok) {
+        verified = true;
+      }
+    } catch (e) {
+      console.error('Supabase verify error:', e);
     }
-  } else if (stored.code !== code.trim() && code.trim() !== '739201' && code.trim() !== '123456') {
-    return res.status(400).json({ message: 'Invalid verification code' });
+  }
+
+  // 2. In-memory check or demo codes if not verified via Supabase
+  if (!verified) {
+    const stored = otpStore.get(normalized);
+    if (stored && stored.expires >= Date.now() && stored.code === code.trim()) {
+      verified = true;
+    } else if (code.trim() === '739201' || code.trim() === '123456') {
+      verified = true;
+    }
+  }
+
+  if (!verified) {
+    return res.status(400).json({ message: 'Invalid or expired verification code. Please check the code sent to your email.' });
   }
 
   const studentUsername = normalized.split('@')[0];

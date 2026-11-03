@@ -57,10 +57,16 @@ function AuthModal() {
       setLoading(true);
       const res = await sendStudentOtp(trimmed);
       setStep(2);
-      setSuccessMsg(`Verification code dispatched to ${trimmed}`);
-      if (res && res.code) {
-        setDemoCode(res.code);
-        setCode(res.code); // Pre-fill for seamless instant evaluation
+      if (res && res.supabaseSent) {
+        setSuccessMsg(`✉️ Verification code dispatched to ${trimmed} via Supabase Auth. Check your email inbox!`);
+        setDemoCode('');
+        setCode('');
+      } else {
+        setSuccessMsg(`Verification code dispatched to ${trimmed}`);
+        if (res && res.code) {
+          setDemoCode(res.code);
+          setCode(res.code);
+        }
       }
     } catch (err) {
       setError(err.message || 'Failed to send verification code.');

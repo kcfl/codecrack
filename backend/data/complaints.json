@@ -100,5 +100,41 @@
         "at": "2026-11-03T08:48:24.825Z"
       }
     ]
+  },
+  {
+    "id": "C06",
+    "category": "Wi-Fi",
+    "description": "Wi-Fi keeps getting disconnected near library reading room",
+    "location": "Central Library, 1st Floor Study Hall",
+    "status": "Raised",
+    "submittedAt": "2026-11-03T09:00:54.782Z",
+    "createdBy": "scholar@satiengg.in",
+    "studentEmail": "scholar@satiengg.in",
+    "supportCount": 0,
+    "statusHistory": [
+      {
+        "from": null,
+        "to": "Raised",
+        "at": "2026-11-03T09:00:54.782Z"
+      }
+    ]
+  },
+  {
+    "id": "C07",
+    "category": "Hostel",
+    "description": "mess food is disgusting and finding insects in it",
+    "location": "jln hostel",
+    "status": "Raised",
+    "submittedAt": "2026-11-03T09:02:06.417Z",
+    "createdBy": "scholar@satiengg.in",
+    "studentEmail": "scholar@satiengg.in",
+    "supportCount": 0,
+    "statusHistory": [
+      {
+        "from": null,
+        "to": "Raised",
+        "at": "2026-11-03T09:02:06.417Z"
+      }
+    ]
   }
 ]
