@@ -3,8 +3,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-const DEFAULT_DATA_DIR = path.join(__dirname, '..', 'data');
+const isServerless = !!process.env.VERCEL || !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.LAMBDA_TASK_ROOT;
+const BUNDLED_DATA_DIR = path.join(__dirname, '..', 'data');
+const BUNDLED_FILE_PATH = path.join(BUNDLED_DATA_DIR, 'complaints.json');
+const DEFAULT_DATA_DIR = isServerless ? os.tmpdir() : BUNDLED_DATA_DIR;
 const DEFAULT_FILE_PATH = path.join(DEFAULT_DATA_DIR, 'complaints.json');
 const CORRUPT_FILE_PATH = path.join(DEFAULT_DATA_DIR, 'complaints.corrupt.json');
 
